@@ -17,7 +17,7 @@ async function start() {
     await app.register(jwt_1.default, {
         secret: process.env.JWT_SECRET ?? "changeme",
     });
-    await app.register(auth_1.authRoutes);
+    await app.register(auth_1.userRoutes);
     await app.register(tickets_1.ticketRoutes);
     await app.listen({
         port: 3006,

@@ -121,6 +121,7 @@ async function importReturns() {
             shipmentNumber: row["رقم الشحنة"]?.toString(),
             phone: row["رقم الهاتف"]?.toString(),
             subCategory: row["الفئة"],
+            itemStatus: row["هل تم استلام الطلب بحالة جيدة"],
             reason: row["السبب"],
             imageUrl: row["صورة الطلب المستلم"],
             botPhone: row["رقم الهاتف المحاكي للبوت"]?.toString(),
