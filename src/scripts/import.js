@@ -1,0 +1,170 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+//@ts-ignore
+const fs_1 = require("fs");
+//@ts-ignore
+const csv_parser_1 = require("csv-parser");
+const client_1 = require("@prisma/client");
+const prisma = new client_1.PrismaClient();
+function readCsv(path) {
+    return new Promise((resolve, reject) => {
+        const rows = [];
+        fs_1.default.createReadStream(path)
+            .pipe((0, csv_parser_1.default)())
+            .on("data", (row) => rows.push(row))
+            .on("end", () => resolve(rows))
+            .on("error", reject);
+    });
+}
+function parseDate(value) {
+    if (!value)
+        return undefined;
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? undefined : date;
+}
+function parseQuantity(value) {
+    if (!value)
+        return null;
+    const v = value.trim();
+    const map = {
+        "واحد": 1,
+        "اثنين": 2,
+        "اثنان": 2,
+        "ثلاثة": 3,
+        "أربعة": 4,
+        "خمسة": 5,
+    };
+    if (map[v])
+        return map[v];
+    const parsed = Number(v);
+    return Number.isNaN(parsed) ? null : parsed;
+}
+async function importComplaints() {
+    const rows = await readCsv("./data/complaints.csv");
+    for (const row of rows) {
+        // تنظيف أسماء الأعمدة من المسافات الخفية
+        const cleanRow = Object.fromEntries(Object.entries(row).map(([key, value]) => [
+            key.trim(),
+            typeof value === "string"
+                ? value.trim()
+                : value,
+        ]));
+        console.log("Complaint Status:", JSON.stringify(cleanRow["حالة الشكوى"]));
+        await prisma.ticket.create({
+            data: {
+                category: client_1.Category.COMPLAINT,
+                //@ts-ignore
+                customerName: cleanRow["اسم العميل"],
+                phone: cleanRow["رقم الهاتف"]?.toString(),
+                //@ts-ignore
+                description: cleanRow["الشكوى او الملاحظة"],
+                //@ts-ignore
+                complaintStatus: cleanRow["حالة الشكوى"] || null,
+                complaintSubmittedAt: parseDate(
+                //@ts-ignore
+                cleanRow["تاريخ تقديم الشكوى"]),
+                botPhone: cleanRow["رقم الهاتف المحاكي للبوت"]?.toString(),
+                //@ts-ignore
+                aljoufNote: cleanRow["ملاحظة الجوف"],
+                //@ts-ignore
+                customerNote: cleanRow["ملاحظة خدمة العملاء"],
+            },
+        });
+    }
+    console.log(`Imported ${rows.length} complaints`);
+}
+async function importModifications() {
+    const rows = await readCsv("./data/order-modifications.csv");
+    for (const row of rows) {
+        await prisma.ticket.create({
+            data: {
+                category: client_1.Category.ORDER_MODIFICATION,
+                orderNumber: row["رقم الطلب"]?.toString(),
+                operation: row["العملية"],
+                productType: row["نوع المنتج"],
+                quantity: parseQuantity(row["الكمية"]),
+                botPhone: row["رقم الهاتف المحاكي للبوت"]?.toString(),
+                imageUrl: row["صورة المنتج"],
+                aljoufNote: row["ملاحظة الجوف"],
+                customerNote: row["ملاحظة خدمة العملاء"],
+            },
+        });
+    }
+    console.log(`Imported ${rows.length} modifications`);
+}
+async function importCancellations() {
+    const rows = await readCsv("./data/cancellations.csv");
+    for (const row of rows) {
+        await prisma.ticket.create({
+            data: {
+                category: client_1.Category.ORDER_CANCELLATION,
+                orderNumber: row["رقم الطلب"]?.toString(),
+                operation: row["العملية"],
+                productType: row["نوع المنتج"],
+                quantity: parseQuantity(row["الكمية"]),
+                botPhone: row["رقم الهاتف المحاكي للبوت"]?.toString(),
+                complaintSubmittedAt: parseDate(row["تاريخ تقديم الشكوى"]),
+                imageUrl: row["صورة المنتج"],
+                aljoufNote: row["ملاحظة الجوف "] || row["ملاحظة الجوف"],
+                customerNote: row["ملاحظة خدمة العملاء "] || row["ملاحظة خدمة العملاء"],
+            },
+        });
+    }
+    console.log(`Imported ${rows.length} cancellations`);
+}
+async function importReturns() {
+    const rows = await readCsv("./data/returns.csv");
+    await prisma.ticket.createMany({
+        data: rows.map((row) => ({
+            category: client_1.Category.RETURN_REPLACEMENT,
+            orderNumber: row["رقم الطلب"]?.toString(),
+            shipmentNumber: row["رقم الشحنة"]?.toString(),
+            phone: row["رقم الهاتف"]?.toString(),
+            subCategory: row["الفئة"],
+            reason: row["السبب"],
+            imageUrl: row["صورة الطلب المستلم"],
+            botPhone: row["رقم الهاتف المحاكي للبوت"]?.toString(),
+            aljoufNote: row["ملاحظة الجوف "] || row["ملاحظة الجوف"],
+            customerNote: row["ملاحظة خدمة العملاء "] ||
+                row["ملاحظة خدمة العملاء"],
+            complaintSubmittedAt: parseDate(row["تاريخ رفع الطلب"]),
+        })),
+    });
+    console.log(`Imported ${rows.length} returns`);
+}
+async function importDelays() {
+    const rows = await readCsv("./data/delays.csv");
+    await prisma.ticket.createMany({
+        data: rows.map((row) => ({
+            category: client_1.Category.ORDER_DELAY_ERROR,
+            orderNumber: row["رقم الطلب"]?.toString(),
+            phone: row["رقم الهاتف"]?.toString(),
+            title: row["فئة المشكلة"],
+            subCategory: row["تصنيف المشكلة"],
+            description: row["وصف المشكلة"],
+            location: row["الموقع"],
+            imageUrl: row["صورة المنتج"],
+            botPhone: row["رقم الهاتف المحاكي للبوت"]?.toString(),
+            aljoufNote: row["ملاحظة الجوف "] || row["ملاحظة الجوف"],
+            customerNote: row["ملاحظة خدمة العملاء "] ||
+                row["ملاحظة خدمة العملاء"],
+            complaintSubmittedAt: parseDate(row["تاريخ رفع الشكوى"]),
+        })),
+    });
+    console.log(`Imported ${rows.length} delays`);
+}
+async function main() {
+    await prisma.ticket.deleteMany();
+    await importComplaints();
+    await importModifications();
+    await importCancellations();
+    await importReturns();
+    await importDelays();
+    const count = await prisma.ticket.count();
+    console.log(`Import completed (${count} records)`);
+}
+main()
+    .catch(console.error)
+    .finally(async () => {
+    await prisma.$disconnect();
+});
