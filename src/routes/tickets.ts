@@ -266,6 +266,25 @@ export async function ticketRoutes(app: FastifyInstance) {
     }
   );
 
+
+app.post(
+  "/tickets",
+  { preHandler: [authenticate] },
+  async (request) => {
+    const { data } = request.body as any;
+
+    return prisma.ticket.create({
+      data: {
+        customerName: data.customerName,
+        phone: data.phone,
+        orderNumber: data.orderNumber,
+        category: data.category,
+        customerNote: data.notes,
+      },
+    });
+  }
+);
+
   app.get(
     "/tickets/:id",
     { preHandler: [authenticate] },
@@ -348,7 +367,10 @@ export async function ticketRoutes(app: FastifyInstance) {
     async (request) => {
       const { id } = request.params as { id: string };
 
-      await prisma.ticket.delete({ where: { id: Number(id) } });
+await prisma.ticket.delete({
+  where: { id: parseInt(id) },
+});
+
 
       return { success: true };
     }

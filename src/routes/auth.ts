@@ -115,11 +115,14 @@ export async function userRoutes(app: FastifyInstance) {
   app.post(
   "/auth/login",
   async (request, reply) => {
+    
     const { username, password } =
       request.body as {
         username: string;
         password: string;
       };
+
+
 
     const user =
       await prisma.user.findUnique({
