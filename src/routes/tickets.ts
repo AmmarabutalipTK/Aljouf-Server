@@ -243,28 +243,111 @@ export async function ticketRoutes(app: FastifyInstance) {
   // TICKETS
   // ==================================
 
-  app.get(
-    "/tickets",
-    { preHandler: [authenticate] },
-    async (request) => {
-      const query = request.query as {
-        category?: string;
-        status?: string;
-        limit?: string;
-      };
+app.get(
+  "/tickets",
+  { preHandler: [authenticate] },
+  async (request) => {
+    const query = request.query as {
+      category?: string;
+      status?: string;
+      search?: string;
+      page?: string;
+      limit?: string;
+    };
 
-      const tickets = await prisma.ticket.findMany({
-        where: {
-          ...(query.category && { category: query.category as Category }),
-          ...(query.status && { status: query.status as Status }),
-        },
-        orderBy: { createdAt: "desc" },
-        take: query.limit ? Number(query.limit) : 50,
-      });
+    const page = Number(query.page ?? 1);
+    const limit = Number(query.limit ?? 50);
+    const search = query.search?.trim();
 
-      return { tickets };
+    const where: any = {};
+
+    if (query.category) {
+      where.category =
+        query.category as Category;
     }
-  );
+
+    if (query.status) {
+      where.status =
+        query.status as Status;
+    }
+
+    if (search) {
+      where.OR = [
+        {
+          customerName: {
+            contains: search,
+          },
+        },
+        {
+          orderNumber: {
+            contains: search,
+          },
+        },
+        {
+          phone: {
+            contains: search,
+          },
+        },
+        {
+          botPhone: {
+            contains: search,
+          },
+        },
+        {
+          shipmentNumber: {
+            contains: search,
+          },
+        },
+        {
+          description: {
+            contains: search,
+          },
+        },
+        {
+          customerNote: {
+            contains: search,
+          },
+        },
+        {
+          aljoufNote: {
+            contains: search,
+          },
+        },
+      ];
+    }
+
+    console.log(
+      "WHERE:",
+      JSON.stringify(where, null, 2)
+    );
+
+    const [tickets, total] =
+      await Promise.all([
+        prisma.ticket.findMany({
+          where,
+          orderBy: {
+            createdAt: "desc",
+          },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+
+        prisma.ticket.count({
+          where,
+        }),
+      ]);
+
+    return {
+      tickets,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(
+        total / limit
+      ),
+    };
+  }
+);
 
 
 app.post(
